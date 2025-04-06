@@ -1,8 +1,6 @@
-import random
-from typing import Any
+import sys
 
 import ale_py
-import cv2
 import gymnasium as gym
 import numpy as np
 import torch as th
@@ -66,22 +64,12 @@ policy_kwargs = dict(
 )
 
 
-# class NewAxisWrapper(gym.ObservationWrapper):
-#     def __init__(self, env):
-#         super().__init__(env)
-
-# def observation(self, observation: Any) -> Any:
-#     obs = super().observation(observation)
-#     print("AAAAA")
-#     return obs[None, ...]
-
-
-def make_env():
+def make_env(render_mode: str | None = None):
     base_env = gym.make(
         "ALE/Galaxian-v5",
         difficulty=0,
         frameskip=1,
-        render_mode=None,
+        render_mode=render_mode,
     )
     base_env = AtariPreprocessing(
         base_env,
@@ -91,7 +79,7 @@ def make_env():
         terminal_on_life_loss=False,
     )
     base_env = ReshapeObservation(base_env, (1, 84, 84))
-    env = CurriculumLearningEnv("ALE/Galaxian-v5", frameskip=1, render_mode=None)
+    env = CurriculumLearningEnv("ALE/Galaxian-v5", frameskip=1)
     env = AtariPreprocessing(
         env,
         frame_skip=4,
@@ -105,15 +93,13 @@ def make_env():
     return base_env, env
 
 
-# 4 instances of game
-# vec_env = make_vec_env(make_env, n_envs=4)
+def train(curriculum_learning: bool):
+    test_env = make_vec_env(lambda: make_env()[0])
+    train_env = make_vec_env(lambda: make_env()[curriculum_learning], n_envs=4)
 
-
-def train():
-    base_env, env = make_env()
     checkpoint_callback = CheckpointCallback(save_freq=10000, save_path=CHECKPOINT_DIR)
     eval_callback = EvalCallback(
-        base_env,
+        test_env,
         best_model_save_path=CHECKPOINT_DIR,
         log_path=CHECKPOINT_DIR,
         eval_freq=1000,
@@ -123,7 +109,7 @@ def train():
 
     model = PPO(
         "CnnPolicy",
-        env,
+        train_env,
         verbose=1,
         tensorboard_log=LOG_DIR,
         policy_kwargs=policy_kwargs,
@@ -134,28 +120,37 @@ def train():
 
 
 def test():
+    env, _ = make_env(render_mode="human")
+
     model = PPO.load("./checkpoints/best_model")
 
-    obs = vec_env.reset()
+    obs, _ = env.reset()
     done = False
-    total_reward = [0, 0, 0, 0]
+    total_reward = 0
     timestep = 0
     while not done:
         timestep += 1
-        # action = [random.randint(0, 5) for _ in range(4)]
         action, _ = model.predict(obs, deterministic=True)
-        obs, reward, done_vec, _ = vec_env.step(action)
-        done = done_vec.any()
+        obs, reward, done, _, _ = env.step(action)
 
-        cv2.imshow("obs", obs[3])
-        cv2.waitKey(100)
+        total_reward = (0 if done else total_reward) + reward
 
-        # vec_env.render("human")
-
-        total_reward = np.select(done_vec, np.zeros(4), total_reward + reward)
-
-        print(done_vec)
         print(timestep, total_reward)
 
 
-train()
+if __name__ == "__main__":
+    mode = sys.argv[1]
+    env = len(sys.argv) > 2 and sys.argv[2]
+
+    if mode not in ["train", "test"]:
+        print("invalid mode: ", mode)
+        exit()
+
+    if env and env not in ["curriculum"]:
+        print("invalid env")
+        exit()
+
+    if mode == "test":
+        test()
+    else:
+        train(env == "curriculum")
