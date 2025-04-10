@@ -40,6 +40,9 @@ class CurriculumLearningEnv(Env):
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         self.current_step = 0
 
+        if self.total_steps == 0 or np.random.random() < 0.5:
+            return self._game.reset(seed=seed, options=options)
+
         base_probs = 1 / np.array(list(self.step_count.values()))
 
         p = softmax(base_probs)
