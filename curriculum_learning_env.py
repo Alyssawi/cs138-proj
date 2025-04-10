@@ -45,7 +45,13 @@ class CurriculumLearningEnv(Env):
 
         base_probs = 1 / np.array(list(self.step_count.values()))
 
-        p = softmax(base_probs)
+        base_probs -= np.min(base_probs)
+
+        p = np.where(
+            np.sum(base_probs) == 0,
+            np.full_like(base_probs, 1) / len(base_probs),
+            base_probs / np.sum(base_probs),
+        )
 
         noise = np.random.dirichlet(np.full_like(p, 0.3))
 
