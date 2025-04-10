@@ -7,6 +7,12 @@ from ale_py.env import AtariEnv
 from gymnasium import Env
 
 
+def softmax(x):
+    x_max = np.amax(x, keepdims=True)
+    exp_x_shifted = np.exp(x - x_max)
+    return exp_x_shifted / np.sum(exp_x_shifted, keepdims=True)
+
+
 class CurriculumLearningEnv(Env):
     def __init__(
         self,
@@ -36,11 +42,7 @@ class CurriculumLearningEnv(Env):
 
         base_probs = 1 / np.array(list(self.step_count.values()))
 
-        p = np.where(
-            np.sum(base_probs) == 0,
-            np.full_like(base_probs, 1) / len(base_probs),
-            base_probs / np.sum(base_probs),
-        )
+        p = softmax(base_probs)
 
         replay_index = np.random.choice(
             list(self.step_count.keys()),

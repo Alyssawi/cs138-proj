@@ -1,3 +1,4 @@
+import os
 import sys
 
 import ale_py
@@ -19,7 +20,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from curriculum_learning_env import CurriculumLearningEnv
 
 LOG_DIR = "./logs/"
-CHECKPOINT_DIR = "./checkpoints/"
+CHECKPOINT_DIR = os.environ["CHECKPOINTS_DIR"]
 
 
 gym.register_envs(ale_py)

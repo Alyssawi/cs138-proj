@@ -18,6 +18,7 @@ module list
 
 source activate sb3
 
+export CHECKPOINTS_DIR=checkpoints-$SLURM_JOB_ID
 ~/condaenv/sb3/bin/python baseline_agent.py train curriculum
 
 conda deactivate
