@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -J c-learn-curr
-#SBATCH --time=01-00:00:00
-#SBATCH -p gpu,preempt
+#SBATCH --time=00-02:00:00
+#SBATCH -p preempt
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16g
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --output=c-curr-learn.%j.out
 #SBATCH --error=c-curr-learn.%j.err
 
