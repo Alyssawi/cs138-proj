@@ -44,9 +44,13 @@ class CurriculumLearningEnv(Env):
 
         p = softmax(base_probs)
 
+        noise = np.random.dirichlet(np.full_like(p, 0.3))
+
+        noisy_p = 0.75 * p + 0.25 * noise
+
         replay_index = np.random.choice(
             list(self.step_count.keys()),
-            p=p,
+            p=noisy_p,
         )
 
         state, obs, info = self.states_seen[replay_index]
