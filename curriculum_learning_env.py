@@ -20,6 +20,8 @@ class CurriculumLearningEnv(Env):
         obs_type: Literal["rgb", "grayscale", "ram"] = "rgb",
         frameskip: tuple[int, int] | int = 4,
         render_mode: Literal["human", "rgb_array"] | None = None,
+        softmax: bool = False,
+        noise: bool = False,
     ):
         self._game = gym.make(
             game, obs_type=obs_type, frameskip=frameskip, render_mode=render_mode
@@ -37,29 +39,34 @@ class CurriculumLearningEnv(Env):
 
         self.ale = self._game.unwrapped.ale
 
+        self.softmax = softmax
+        self.noise = noise
+
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         self.current_step = 0
 
-        if self.total_steps == 0 or np.random.random() < 0.5:
+        if self.total_steps == 0 or np.random.random() < 0.1:
             return self._game.reset(seed=seed, options=options)
 
-        base_probs = 1 / np.array(list(self.step_count.values()))
+        counts = np.array(list(self.step_count.values()))
 
-        base_probs -= np.min(base_probs)
+        if self.softmax:
+            p = softmax(-counts)
+        else:
+            base_probs = 1 / counts
+            p = np.where(
+                np.sum(base_probs) == 0,
+                np.full_like(base_probs, 1) / len(base_probs),
+                base_probs / np.sum(base_probs),
+            )
 
-        p = np.where(
-            np.sum(base_probs) == 0,
-            np.full_like(base_probs, 1) / len(base_probs),
-            base_probs / np.sum(base_probs),
-        )
-
-        noise = np.random.dirichlet(np.full_like(p, 0.3))
-
-        noisy_p = 0.75 * p + 0.25 * noise
+        if self.noise:
+            noise = np.random.dirichlet(np.full_like(p, 0.3))
+            p = 0.75 * p + 0.25 * noise
 
         replay_index = np.random.choice(
             list(self.step_count.keys()),
-            p=noisy_p,
+            p=p,
         )
 
         state, obs, info = self.states_seen[replay_index]

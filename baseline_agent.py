@@ -19,8 +19,10 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 from curriculum_learning_env import CurriculumLearningEnv
 
-LOG_DIR = "./logs/"
-CHECKPOINT_DIR = os.environ["CHECKPOINTS_DIR"]
+LOG_DIR = os.environ["LOGS_DIR"]
+CHECKPOINT_DIR = (
+    os.environ["CHECKPOINTS_DIR"] if "CHECKPOINTS_DIR" in os.environ else None
+)
 
 
 gym.register_envs(ale_py)
@@ -65,7 +67,9 @@ policy_kwargs = dict(
 )
 
 
-def make_env(render_mode: str | None = None):
+def make_env(
+    render_mode: str | None = None, noise: bool = False, softmax: bool = False
+):
     base_env = gym.make(
         "ALE/Galaxian-v5",
         difficulty=0,
@@ -80,7 +84,9 @@ def make_env(render_mode: str | None = None):
         terminal_on_life_loss=False,
     )
     base_env = ReshapeObservation(base_env, (1, 84, 84))
-    env = CurriculumLearningEnv("ALE/Galaxian-v5", frameskip=1)
+    env = CurriculumLearningEnv(
+        "ALE/Galaxian-v5", frameskip=1, noise=noise, softmax=softmax
+    )
     env = AtariPreprocessing(
         env,
         frame_skip=4,
@@ -89,16 +95,24 @@ def make_env(render_mode: str | None = None):
         scale_obs=True,
         terminal_on_life_loss=False,
     )
-    env = ReshapeObservation(base_env, (1, 84, 84))
+    env = ReshapeObservation(env, (1, 84, 84))
 
     return base_env, env
 
 
-def train(curriculum_learning: bool):
+def train(curriculum_learning: bool, noise: bool, softmax: bool):
     test_env = make_vec_env(lambda: make_env()[0])
-    train_env = make_vec_env(lambda: make_env()[curriculum_learning], n_envs=4)
+    train_env = make_vec_env(
+        lambda: make_env(noise=noise, softmax=softmax)[curriculum_learning], n_envs=4
+    )
 
-    checkpoint_callback = CheckpointCallback(save_freq=10000, save_path=CHECKPOINT_DIR)
+    if CHECKPOINT_DIR:
+        checkpoint_callback = CheckpointCallback(
+            save_freq=10000, save_path=CHECKPOINT_DIR
+        )
+    else:
+        checkpoint_callback = None
+
     eval_callback = EvalCallback(
         test_env,
         best_model_save_path=CHECKPOINT_DIR,
@@ -116,7 +130,12 @@ def train(curriculum_learning: bool):
         policy_kwargs=policy_kwargs,
     )
 
-    model.learn(1_000_000, callback=[checkpoint_callback, eval_callback])
+    model.learn(
+        1_000_000,
+        callback=[checkpoint_callback, eval_callback]
+        if checkpoint_callback
+        else [eval_callback],
+    )
     model.save("ppo")
 
 
@@ -154,4 +173,6 @@ if __name__ == "__main__":
     if mode == "test":
         test()
     else:
-        train(env == "curriculum")
+        noise = "--noise" in sys.argv
+        softmax = "--softmax" in sys.argv
+        train(env == "curriculum", noise=noise, softmax=softmax)
