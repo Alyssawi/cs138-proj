@@ -20,6 +20,6 @@ source activate sb3
 
 export CHECKPOINTS_DIR=base/checkpoints-$SLURM_JOB_ID
 export LOGS_DIR=base/logs
-~/condaenv/sb3/bin/python baseline_agent.py train
+~/condaenv/sb3/bin/python agent.py train
 
 conda deactivate

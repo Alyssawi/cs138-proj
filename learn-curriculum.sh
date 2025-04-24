@@ -5,9 +5,9 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8g
-#SBATCH --gres=gpu:h100:1
-#SBATCH --output=curr-softmax-noise-2/learn.%j.out
-#SBATCH --error=curr-softmax-noise-2/learn.%j.err
+#SBATCH --gres=gpu:l40:1
+#SBATCH --output=curr/learn.%j.out
+#SBATCH --error=curr/learn.%j.err
 
 hostname
 date
@@ -18,7 +18,7 @@ module list
 
 source activate sb3
 
-export LOGS_DIR=curr-softmax-noise-2/logs
-~/condaenv/sb3/bin/python baseline_agent.py train curriculum --softmax --noise
+export LOGS_DIR=curr/logs
+~/condaenv/sb3/bin/python agent.py train curriculum
 
 conda deactivate

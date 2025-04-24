@@ -1,3 +1,4 @@
+import multiprocessing as mp
 from collections import defaultdict
 from typing import Literal
 
@@ -17,6 +18,7 @@ class CurriculumLearningEnv(Env):
     def __init__(
         self,
         game: str,
+        global_step,
         obs_type: Literal["rgb", "grayscale", "ram"] = "rgb",
         frameskip: tuple[int, int] | int = 4,
         render_mode: Literal["human", "rgb_array"] | None = None,
@@ -41,11 +43,20 @@ class CurriculumLearningEnv(Env):
 
         self.softmax = softmax
         self.noise = noise
+        self.global_step = global_step
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         self.current_step = 0
 
-        if self.total_steps == 0 or np.random.random() < 0.1:
+        if self.global_step is not None:
+            global_step = self.global_step.value
+        else:
+            global_step = self.total_steps
+
+        schedule_progress = min(global_step / 1_000_000, 1.0)
+        threshold = 0.5 + 0.5 * schedule_progress
+
+        if self.total_steps == 0 or np.random.random() < threshold:
             return self._game.reset(seed=seed, options=options)
 
         counts = np.array(list(self.step_count.values()))

@@ -1,16 +1,16 @@
+import multiprocessing as mp
 import os
 import sys
 
 import ale_py
 import gymnasium as gym
-import numpy as np
 import torch as th
 import torch.nn as nn
 from gymnasium import spaces
-from gymnasium.spaces import Box
 from gymnasium.wrappers import AtariPreprocessing, ReshapeObservation
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import (
+    BaseCallback,
     CheckpointCallback,
     EvalCallback,
 )
@@ -26,6 +26,17 @@ CHECKPOINT_DIR = (
 
 
 gym.register_envs(ale_py)
+
+
+class SyncGlobalStepCallback(BaseCallback):
+    def __init__(self, global_step, verbose=0):
+        super().__init__(verbose)
+        self.global_step = global_step
+
+    def _on_step(self) -> bool:
+        with self.global_step.get_lock():
+            self.global_step.value = self.model.num_timesteps
+        return True
 
 
 class CustomCNN(BaseFeaturesExtractor):
@@ -68,7 +79,10 @@ policy_kwargs = dict(
 
 
 def make_env(
-    render_mode: str | None = None, noise: bool = False, softmax: bool = False
+    global_step=None,
+    render_mode: str | None = None,
+    noise: bool = False,
+    softmax: bool = False,
 ):
     base_env = gym.make(
         "ALE/Galaxian-v5",
@@ -85,7 +99,11 @@ def make_env(
     )
     base_env = ReshapeObservation(base_env, (1, 84, 84))
     env = CurriculumLearningEnv(
-        "ALE/Galaxian-v5", frameskip=1, noise=noise, softmax=softmax
+        "ALE/Galaxian-v5",
+        frameskip=1,
+        noise=noise,
+        softmax=softmax,
+        global_step=global_step,
     )
     env = AtariPreprocessing(
         env,
@@ -101,9 +119,13 @@ def make_env(
 
 
 def train(curriculum_learning: bool, noise: bool, softmax: bool):
+    global_step = mp.Value("i", 0)
     test_env = make_vec_env(lambda: make_env()[0])
     train_env = make_vec_env(
-        lambda: make_env(noise=noise, softmax=softmax)[curriculum_learning], n_envs=4
+        lambda: make_env(noise=noise, softmax=softmax, global_step=global_step)[
+            curriculum_learning
+        ],
+        n_envs=4,
     )
 
     if CHECKPOINT_DIR:
@@ -122,6 +144,8 @@ def train(curriculum_learning: bool, noise: bool, softmax: bool):
         render=False,
     )
 
+    sync_callback = SyncGlobalStepCallback(global_step)
+
     model = PPO(
         "CnnPolicy",
         train_env,
@@ -132,9 +156,9 @@ def train(curriculum_learning: bool, noise: bool, softmax: bool):
 
     model.learn(
         1_000_000,
-        callback=[checkpoint_callback, eval_callback]
+        callback=[checkpoint_callback, eval_callback, sync_callback]
         if checkpoint_callback
-        else [eval_callback],
+        else [eval_callback, sync_callback],
     )
     model.save("ppo")
 
